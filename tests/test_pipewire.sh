@@ -20,6 +20,7 @@ test_portal_kde_backend_activatable() {
 
 test_portal_backend_missing_for_unknown_desktop() {
     busctl() { return 1; }
+    # shellcheck disable=SC2034  # read by lib/pipewire.sh:pw_check_portal_backend via detect_desktop
     XDG_CURRENT_DESKTOP=SomeWeirdWM
     # falls back to filesystem check, which will not find a KDE/GTK service
     # file match named after an unknown DE -> reported unknown-desktop

@@ -5,18 +5,21 @@
 set -u
 
 APP_NAME="steam-remoteplay-wayland-fix"
+# shellcheck disable=SC2034  # read by bin/steam-remoteplay-wayland-fix (version/help output)
 APP_VERSION="0.1.0"
 
 CONFIG_DIR="${SRWF_CONFIG_DIR:-$HOME/.config/steam-remoteplay-wayland-fix}"
 STATE_FILE="$CONFIG_DIR/state.env"
 BACKUP_DIR="$CONFIG_DIR/backups"
 LOG_DIR="$CONFIG_DIR/logs"
+# shellcheck disable=SC2034  # read by lib/wrapper.sh (_write_wrapper_files, the generated wrapper script)
 ENV_CONF="$CONFIG_DIR/env.conf"
 
 # Marker embedded in every wrapper we generate. Used to recognize "this file
 # was written by us" vs. a foreign script or Steam's original ELF binary, and
 # to detect Steam having overwritten our wrapper on update.
 WRAPPER_MARKER="# managed-by: ${APP_NAME}"
+# shellcheck disable=SC2034  # read by lib/wrapper.sh (wrapper_installed_version)
 WRAPPER_VERSION_TAG_PREFIX="# wrapper-version:"
 
 # ---- terminal colors (disabled when not a tty or NO_COLOR is set) ----

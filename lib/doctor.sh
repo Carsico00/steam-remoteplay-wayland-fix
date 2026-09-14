@@ -4,6 +4,7 @@
 
 doctor_run() {
     local fix="${1:-0}" assume_yes="${2:-0}"
+    # shellcheck disable=SC2034  # read by lib/common.sh:confirm() in the same process
     [[ "$assume_yes" == "1" ]] && SRWF_ASSUME_YES=1
 
     log_line "== ${APP_NAME} doctor v${APP_VERSION} =="

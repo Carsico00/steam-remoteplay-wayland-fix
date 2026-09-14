@@ -3,8 +3,9 @@
 # Nothing here touches the real system: each test gets its own temp $HOME.
 
 set -u
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
+# shellcheck source=test_helpers.sh
 source ./test_helpers.sh
 
 for f in test_detect.sh test_backup.sh test_wrapper.sh test_pipewire.sh test_coredump.sh test_cli_integration.sh; do

@@ -104,7 +104,7 @@ cmd_install() {
         return 0
     fi
 
-    local pkg="$(egl_wayland_32_package)"
+    local pkg; pkg="$(egl_wayland_32_package)"
     local w32; w32=$(check_32bit_egl_wayland)
     if [[ "$w32" != "ok" ]]; then
         log_warn "32-bit NVIDIA EGL/Wayland missing ($w32)."

@@ -9,15 +9,25 @@ LIB_DIR="$PROJECT_DIR/lib"
 
 # shellcheck source=lib/common.sh
 source "$LIB_DIR/common.sh"
+# shellcheck source=lib/detect.sh
 source "$LIB_DIR/detect.sh"
+# shellcheck source=lib/steam.sh
 source "$LIB_DIR/steam.sh"
+# shellcheck source=lib/backup.sh
 source "$LIB_DIR/backup.sh"
+# shellcheck source=lib/deps.sh
 source "$LIB_DIR/deps.sh"
+# shellcheck source=lib/pipewire.sh
 source "$LIB_DIR/pipewire.sh"
+# shellcheck source=lib/coredump.sh
 source "$LIB_DIR/coredump.sh"
+# shellcheck source=lib/wrapper.sh
 source "$LIB_DIR/wrapper.sh"
+# shellcheck source=lib/watcher.sh
 source "$LIB_DIR/watcher.sh"
+# shellcheck source=lib/smoketest.sh
 source "$LIB_DIR/smoketest.sh"
+# shellcheck source=lib/doctor.sh
 source "$LIB_DIR/doctor.sh"
 
 T_TOTAL=0
@@ -106,7 +116,9 @@ new_mock_env() {
     STATE_FILE="$CONFIG_DIR/state.env"
     BACKUP_DIR="$CONFIG_DIR/backups"
     LOG_DIR="$CONFIG_DIR/logs"
+    # shellcheck disable=SC2034  # read by lib/wrapper.sh
     ENV_CONF="$CONFIG_DIR/env.conf"
+    # shellcheck disable=SC2034  # read by lib/backup.sh and tests/test_backup.sh
     MANIFEST="$BACKUP_DIR/manifest.tsv"
     SRWF_WARN_COUNT=0; SRWF_FAIL_COUNT=0; SRWF_FIX_COUNT=0
 
