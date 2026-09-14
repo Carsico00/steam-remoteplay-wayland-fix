@@ -1,0 +1,14 @@
+GBM platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+
+X11 platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+
+Wayland platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5

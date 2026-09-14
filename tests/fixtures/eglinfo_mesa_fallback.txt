@@ -1,0 +1,7 @@
+GBM platform:
+eglinfo: eglInitialize failed
+
+Wayland platform:
+EGL API version: 1.5
+EGL vendor string: Mesa Project
+EGL version string: 1.5 (llvmpipe)
