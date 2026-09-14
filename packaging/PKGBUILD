@@ -1,0 +1,32 @@
+# Maintainer: Carsico00 <Carsico00@users.noreply.github.com>
+pkgname=steam-remoteplay-wayland-fix
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Integral compatibility fix for Steam Remote Play / Remote Play Together on Wayland + NVIDIA (proprietary driver)"
+arch=('any')
+url="https://github.com/Carsico00/steam-remoteplay-wayland-fix"
+license=('MIT')
+depends=('bash' 'coreutils' 'grep' 'gawk' 'systemd')
+optdepends=(
+    'egl-wayland: NVIDIA EGLStream Wayland platform (64-bit, usually already required by your session)'
+    'lib32-egl-wayland: NVIDIA EGLStream Wayland platform for Steam 32-bit components'
+    'coreutils: coredumpctl-based crash detection (systemd-coredump)'
+    'pacman-contrib: not required, but useful alongside this tool'
+)
+backup=()
+source=("git+https://github.com/Carsico00/steam-remoteplay-wayland-fix.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/${pkgname}"
+
+    install -Dm755 bin/steam-remoteplay-wayland-fix "$pkgdir/usr/bin/steam-remoteplay-wayland-fix"
+
+    install -d "$pkgdir/usr/share/${pkgname}/lib"
+    install -Dm644 lib/*.sh -t "$pkgdir/usr/share/${pkgname}/lib"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/${pkgname}/README.md"
+    install -d "$pkgdir/usr/share/doc/${pkgname}/docs"
+    install -Dm644 docs/*.md -t "$pkgdir/usr/share/doc/${pkgname}/docs"
+}

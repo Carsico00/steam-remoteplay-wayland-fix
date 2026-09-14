@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -x bin/steam-remoteplay-wayland-fix lib/*.sh install.sh uninstall.sh tests/*.sh
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test suite (mocked HOME/Steam, no real system access)
+        run: ./tests/run_tests.sh
+
+  install-uninstall-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fresh install/status/repair/uninstall cycle against a mocked Steam layout
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/srwf-home"
+          mkdir -p "$HOME/.local/share/Steam/ubuntu12_64"
+          printf '\x7fELF-fake-original' > "$HOME/.local/share/Steam/ubuntu12_64/streaming_client"
+          chmod +x "$HOME/.local/share/Steam/ubuntu12_64/streaming_client"
+          export SRWF_FORCE_WORKAROUND=1
+          export SRWF_ASSUME_YES=1
+          bindir="$RUNNER_TEMP/fakebin"
+          mkdir -p "$bindir"
+          printf '#!/bin/bash\ncat "%s/tests/fixtures/eglinfo_nvidia_ok.txt"\n' "$GITHUB_WORKSPACE" > "$bindir/eglinfo32"
+          chmod +x "$bindir/eglinfo32"
+          export PATH="$bindir:$PATH"
+
+          ./bin/steam-remoteplay-wayland-fix install -y
+          ./bin/steam-remoteplay-wayland-fix status | grep -q "Wrapper status:        active"
+          ./bin/steam-remoteplay-wayland-fix repair
+          ./bin/steam-remoteplay-wayland-fix repair
+          ./bin/steam-remoteplay-wayland-fix uninstall
+          ./bin/steam-remoteplay-wayland-fix status | grep -q "Wrapper status:        not-installed"
+
+  pkgbuild:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PKGBUILD parses and generates .SRCINFO
+        run: |
+          set -euo pipefail
+          useradd -m builder
+          chown -R builder:builder .
+          cd packaging
+          su builder -c "makepkg --printsrcinfo" > .SRCINFO
+          cat .SRCINFO
+      - name: namcap lint (non-fatal)
+        run: |
+          pacman -Sy --noconfirm namcap || true
+          namcap packaging/PKGBUILD || true
