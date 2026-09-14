@@ -50,7 +50,11 @@ jobs:
           # (expected here: no real GPU/systemd/PipeWire in this container)
           # and only exit 2 on a real FAILure - so allow 0/1 explicitly
           # rather than letting `set -e` kill the job on a plain WARN.
-          run_allow_warn() { "$@"; rc=$?; [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"; }
+          run_allow_warn() {
+              local rc=0
+              "$@" || rc=$?
+              [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
+          }
 
           ./bin/steam-remoteplay-wayland-fix install -y
           out=$(./bin/steam-remoteplay-wayland-fix status)
