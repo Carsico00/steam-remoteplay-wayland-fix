@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# steam-remoteplay-wayland-fix - integral compatibility fix for Steam Remote
+# Play / Remote Play Together on Wayland + NVIDIA (proprietary driver).
+#
+# Usage: steam-remoteplay-wayland-fix <command> [options]
+#   install     Back up the original streaming_client, install the wrapper
+#               (only if this system actually needs it), install the
+#               optional Steam-update watcher.
+#   uninstall   Restore Valve's original streaming_client and remove
+#               everything this tool installed.
+#   status      Quick, non-invasive summary of current state.
+#   doctor      Full diagnostic report. Add --fix to apply safe fixes inline.
+#   repair      Idempotent full remediation (doctor --fix --yes).
+#   test        Synthetic smoke test of the graphics/EGL init crash path.
+#
+# Options: --yes/-y (assume yes to prompts), --quiet, --no-watcher (install).
+
+set -u
+set -o pipefail
+
+SELF_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+
+# Resolve lib/: a git checkout keeps lib/ next to bin/ (../lib); a system
+# package (PKGBUILD) installs bin/ under /usr/bin and lib/ under
+# /usr/share/steam-remoteplay-wayland-fix/lib instead. SRWF_LIB_DIR lets
+# tests/packagers override this explicitly.
+if [[ -n "${SRWF_LIB_DIR:-}" ]]; then
+    LIB_DIR="$SRWF_LIB_DIR"
+elif [[ -f "$(dirname "$SELF_PATH")/../lib/common.sh" ]]; then
+    LIB_DIR="$(cd "$(dirname "$SELF_PATH")/../lib" && pwd)"
+elif [[ -f "/usr/share/steam-remoteplay-wayland-fix/lib/common.sh" ]]; then
+    LIB_DIR="/usr/share/steam-remoteplay-wayland-fix/lib"
+else
+    echo "steam-remoteplay-wayland-fix: cannot locate lib/ (checked ../lib and /usr/share/steam-remoteplay-wayland-fix/lib)" >&2
+    exit 1
+fi
+
+# shellcheck source=lib/common.sh
+source "$LIB_DIR/common.sh"
+# shellcheck source=lib/detect.sh
+source "$LIB_DIR/detect.sh"
+# shellcheck source=lib/steam.sh
+source "$LIB_DIR/steam.sh"
+# shellcheck source=lib/backup.sh
+source "$LIB_DIR/backup.sh"
+# shellcheck source=lib/deps.sh
+source "$LIB_DIR/deps.sh"
+# shellcheck source=lib/pipewire.sh
+source "$LIB_DIR/pipewire.sh"
+# shellcheck source=lib/coredump.sh
+source "$LIB_DIR/coredump.sh"
+# shellcheck source=lib/wrapper.sh
+source "$LIB_DIR/wrapper.sh"
+# shellcheck source=lib/watcher.sh
+source "$LIB_DIR/watcher.sh"
+# shellcheck source=lib/smoketest.sh
+source "$LIB_DIR/smoketest.sh"
+# shellcheck source=lib/doctor.sh
+source "$LIB_DIR/doctor.sh"
+
+usage() {
+    cat <<EOF
+${APP_NAME} v${APP_VERSION}
+
+Usage: ${APP_NAME} <command> [options]
+
+Commands:
+  install       Install the Remote Play Wayland/NVIDIA compatibility fix
+  uninstall     Restore Steam's original streaming_client
+  status        Quick summary of current state
+  doctor        Full diagnostic report (add --fix to repair inline)
+  repair        Idempotent full remediation (safe to run repeatedly)
+  test          Synthetic smoke test of the graphics/EGL init crash path
+  version       Print version
+
+Options:
+  -y, --yes         Assume yes for prompts (pacman still asks separately)
+  -q, --quiet       Only print warnings/failures
+  --no-watcher      (install) do not install the systemd --user watcher
+  --fix             (doctor) apply safe fixes inline
+
+Docs: docs/architecture.md, docs/diagnostics.md, docs/troubleshooting.md
+EOF
+}
+
+cmd_install() {
+    local no_watcher=0
+    for a in "$@"; do [[ "$a" == "--no-watcher" ]] && no_watcher=1; done
+
+    ensure_dirs
+    log_line "== ${APP_NAME}: install =="
+
+    if ! detect_steam_root >/dev/null 2>&1; then
+        if [[ "$(detect_steam_is_flatpak_only)" == "yes" ]]; then
+            die "Only a Flatpak Steam install was found. Not supported (see docs/troubleshooting.md)."
+        fi
+        die "No Steam installation found under \$HOME/.local/share/Steam or \$HOME/.steam."
+    fi
+
+    if ! needs_nvidia_wayland_workaround; then
+        log_info "This system does not match the NVIDIA + Wayland (proprietary driver) profile this project targets."
+        log_info "GPU vendor: $(detect_gpu_vendor), session: $(detect_session_type), NVIDIA driver: $(detect_nvidia_driver_kind)"
+        log_info "Nothing to patch. Run 'doctor' for the full picture, or 'status' any time."
+        return 0
+    fi
+
+    local pkg="$(egl_wayland_32_package)"
+    local w32; w32=$(check_32bit_egl_wayland)
+    if [[ "$w32" != "ok" ]]; then
+        log_warn "32-bit NVIDIA EGL/Wayland missing ($w32)."
+        if confirm "Install $pkg now (needed for Steam's 32-bit components under Wayland)?"; then
+            install_pkg "$pkg"
+        else
+            log_warn "Continuing without it; some 32-bit Steam UI elements may render via software fallback."
+        fi
+    fi
+
+    install_wrapper || die "Failed to install the wrapper. See messages above." 1
+
+    if [[ "$no_watcher" == "0" ]]; then
+        watcher_install "$SELF_PATH"
+    fi
+
+    log_line ""
+    log_ok "Install complete. Run '${APP_NAME} status' to verify, or '${APP_NAME} test' for a smoke test."
+}
+
+cmd_uninstall() {
+    log_line "== ${APP_NAME}: uninstall =="
+    watcher_uninstall
+    uninstall_wrapper
+}
+
+cmd_status() {
+    log_line "== ${APP_NAME}: status =="
+    local wstatus; wstatus=$(wrapper_status)
+    log_line "Wrapper status:        $wstatus"
+    log_line "Workaround needed:     $(needs_nvidia_wayland_workaround && echo yes || echo no)"
+    log_line "Watcher:               $(watcher_status)"
+    local client; client=$(streaming_client_path 2>/dev/null || echo "n/a")
+    log_line "streaming_client:      $client"
+    log_line "Last install (UTC):    $(state_get last_install_timestamp)"
+    log_line "Steam build at install:$(state_get last_install_steam_build)"
+    log_line "Current Steam build:   $(detect_steam_build_id)"
+    if backup_has pristine-real; then
+        log_line "Pristine backup:       $(backup_latest pristine-real)"
+    else
+        log_line "Pristine backup:       none"
+    fi
+    case "$wstatus" in
+        active) return 0 ;;
+        stale-overwritten|corrupt) return 2 ;;
+        *) return 0 ;;
+    esac
+}
+
+cmd_doctor() {
+    local fix=0
+    for a in "$@"; do [[ "$a" == "--fix" ]] && fix=1; done
+    doctor_run "$fix" "${SRWF_ASSUME_YES:-0}"
+}
+
+cmd_repair() {
+    log_line "== ${APP_NAME}: repair =="
+    repair_run
+}
+
+cmd_test() {
+    log_line "== ${APP_NAME}: test =="
+    smoketest_run
+}
+
+main() {
+    local cmd="${1:-}"
+    [[ $# -gt 0 ]] && shift
+
+    local rest=()
+    for a in "$@"; do
+        case "$a" in
+            -y|--yes) SRWF_ASSUME_YES=1 ;;
+            -q|--quiet) SRWF_QUIET=1 ;;
+            *) rest+=("$a") ;;
+        esac
+    done
+    export SRWF_ASSUME_YES="${SRWF_ASSUME_YES:-0}"
+    export SRWF_QUIET="${SRWF_QUIET:-0}"
+
+    case "$cmd" in
+        install)   cmd_install "${rest[@]}" ;;
+        uninstall) cmd_uninstall "${rest[@]}" ;;
+        status)    cmd_status "${rest[@]}" ;;
+        doctor)    cmd_doctor "${rest[@]}" ;;
+        repair)    cmd_repair "${rest[@]}" ;;
+        test)      cmd_test "${rest[@]}" ;;
+        version|--version|-v) echo "${APP_NAME} ${APP_VERSION}" ;;
+        help|--help|-h|"") usage ;;
+        *) usage; die "Unknown command: $cmd" ;;
+    esac
+}
+
+main "$@"
